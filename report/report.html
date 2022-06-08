@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 02-Jun-2022 at 17:01:53 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>/Library/Java/JavaVirtualMachines/jdk-18.0.1.1.jdk/Contents/Home</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>macOS-12.4-x86_64-i386-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"depends": "1.0.1", "forked": "1.4.0", "html": "3.1.1", "metadata": "2.0.1", "xdist": "2.5.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>31 tests ran in 44.70 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">31 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_create_user</td>
+          <td class="col-duration">1.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_create_user:test_Todo.py:15 Create user API invoked
+INFO     test_create_user:test_Todo.py:18 Create user API response received {&#x27;user&#x27;: {&#x27;age&#x27;: 20, &#x27;_id&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;name&#x27;: &#x27;Kumar&#x27;, &#x27;email&#x27;: &#x27;kumar@gmail.com&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:10.093Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:10.330Z&#x27;, &#x27;__v&#x27;: 1}, &#x27;token&#x27;: &#x27;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2Mjk4OWY3ZTI4MDY4ZTAwMTdjYTI2YTgiLCJpYXQiOjE2NTQxNjk0NzB9.EtLDvf40ItZ-WTACk2D_jN5y6c3aD6czwtEog4GOIVA&#x27;}
+INFO     test_create_user:test_Todo.py:23 Create user API assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_create_user_error</td>
+          <td class="col-duration">1.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_create_user_error:test_Todo.py:27 Create user API invoked for negative testing
+INFO     test_create_user_error:test_Todo.py:30 Create user API response for existing user E11000 duplicate key error collection: todo-list.users index: email_1 dup key: { email: &quot;kumar@gmail.com&quot; }
+INFO     test_create_user_error:test_Todo.py:33 Create user API Assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_login_user_invalid</td>
+          <td class="col-duration">1.21</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_login_user_invalid:test_Todo.py:37 login user API invoked for invalid credentials
+INFO     test_login_user_invalid:test_Todo.py:40 login user API response for invalid credentials Unable to login
+INFO     test_login_user_invalid:test_Todo.py:43 login user API assertion completed for invalid credentials<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_update_user_without_login</td>
+          <td class="col-duration">0.93</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_update_user_without_login:test_Todo.py:48 update user API invoked before login
+INFO     test_update_user_without_login:test_Todo.py:52 update user API response without login {&#x27;error&#x27;: &#x27;Please authenticate.&#x27;}
+INFO     test_update_user_without_login:test_Todo.py:54 update user API response without login assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_login_user</td>
+          <td class="col-duration">1.57</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_login_user:test_Todo.py:58 login user API invoked for valid credentials
+INFO     test_login_user:test_Todo.py:61 login user API response for valid credentials {&#x27;user&#x27;: {&#x27;age&#x27;: 20, &#x27;_id&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;name&#x27;: &#x27;Kumar&#x27;, &#x27;email&#x27;: &#x27;kumar@gmail.com&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:10.093Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:15.257Z&#x27;, &#x27;__v&#x27;: 2}, &#x27;token&#x27;: &#x27;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2Mjk4OWY3ZTI4MDY4ZTAwMTdjYTI2YTgiLCJpYXQiOjE2NTQxNjk0NzV9.irGIdWtzMx6vFKeBpEVVip01pXvEFyalsTYYIxpzLpE&#x27;}
+INFO     test_login_user:test_Todo.py:68 login user API assertion completed for valid credentials<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_update_user</td>
+          <td class="col-duration">1.38</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_update_user:test_Todo.py:73 update user API invoked for valid credentials
+INFO     test_update_user:test_Todo.py:77 update user API response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;age&#x27;: 25, &#x27;_id&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;name&#x27;: &#x27;Kumar&#x27;, &#x27;email&#x27;: &#x27;kumar@gmail.com&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:10.093Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:16.642Z&#x27;, &#x27;__v&#x27;: 2}}
+INFO     test_update_user:test_Todo.py:80 update user API assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData0]</td>
+          <td class="col-duration">1.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Reading books
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Reading books.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8628068e0017ca26ac&#x27;, &#x27;description&#x27;: &#x27;Reading books&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Reading books
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Reading books
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Reading books<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData1]</td>
+          <td class="col-duration">1.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Playing cricket
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Playing cricket.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8728068e0017ca26ad&#x27;, &#x27;description&#x27;: &#x27;Playing cricket&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Playing cricket
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Playing cricket
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Playing cricket<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData2]</td>
+          <td class="col-duration">1.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Writing code
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Writing code.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8828068e0017ca26ae&#x27;, &#x27;description&#x27;: &#x27;Writing code&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Writing code
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Writing code
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Writing code<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData3]</td>
+          <td class="col-duration">1.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Reading newspaper
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Reading newspaper.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8a28068e0017ca26af&#x27;, &#x27;description&#x27;: &#x27;Reading newspaper&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Reading newspaper
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Reading newspaper
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Reading newspaper<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData4]</td>
+          <td class="col-duration">1.41</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Playing football
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Playing football.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8b28068e0017ca26b0&#x27;, &#x27;description&#x27;: &#x27;Playing football&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Playing football
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Playing football
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Playing football<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData5]</td>
+          <td class="col-duration">1.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Gardening
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Gardening.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8d28068e0017ca26b1&#x27;, &#x27;description&#x27;: &#x27;Gardening&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Gardening
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Gardening
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Gardening<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData6]</td>
+          <td class="col-duration">1.35</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Watching TV
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Watching TV.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8e28068e0017ca26b2&#x27;, &#x27;description&#x27;: &#x27;Watching TV&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Watching TV
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Watching TV
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Watching TV<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData7]</td>
+          <td class="col-duration">1.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Drinking
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Drinking.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9028068e0017ca26b3&#x27;, &#x27;description&#x27;: &#x27;Drinking&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Drinking
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Drinking
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Drinking<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData8]</td>
+          <td class="col-duration">1.37</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Running
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Running.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9128068e0017ca26b4&#x27;, &#x27;description&#x27;: &#x27;Running&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Running
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Running
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Running<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData9]</td>
+          <td class="col-duration">1.41</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Cycling
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Cycling.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9328068e0017ca26b5&#x27;, &#x27;description&#x27;: &#x27;Cycling&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Cycling
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Cycling
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Cycling<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData10]</td>
+          <td class="col-duration">1.41</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Refreshing
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Refreshing.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9428068e0017ca26b6&#x27;, &#x27;description&#x27;: &#x27;Refreshing&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:32.489Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:32.489Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Refreshing
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Refreshing
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Refreshing<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData11]</td>
+          <td class="col-duration">1.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Jogging
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Jogging.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9528068e0017ca26b7&#x27;, &#x27;description&#x27;: &#x27;Jogging&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:33.886Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:33.886Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Jogging
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Jogging
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Jogging<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData12]</td>
+          <td class="col-duration">1.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Cleaning
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Cleaning.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9728068e0017ca26b8&#x27;, &#x27;description&#x27;: &#x27;Cleaning&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:35.299Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:35.299Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Cleaning
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Cleaning
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Cleaning<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData13]</td>
+          <td class="col-duration">1.41</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Listening
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Listening.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9828068e0017ca26b9&#x27;, &#x27;description&#x27;: &#x27;Listening&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:36.731Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:36.731Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Listening
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Listening
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Listening<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData14]</td>
+          <td class="col-duration">1.44</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Jumping
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Jumping.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9a28068e0017ca26ba&#x27;, &#x27;description&#x27;: &#x27;Jumping&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:38.163Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:38.163Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Jumping
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Jumping
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Jumping<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData15]</td>
+          <td class="col-duration">1.44</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Swimming
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Swimming.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9b28068e0017ca26bb&#x27;, &#x27;description&#x27;: &#x27;Swimming&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:39.612Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:39.612Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Swimming
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Swimming
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Swimming<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData16]</td>
+          <td class="col-duration">1.83</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Lifting
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Lifting.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9d28068e0017ca26bc&#x27;, &#x27;description&#x27;: &#x27;Lifting&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:41.438Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:41.438Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Lifting
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Lifting
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Lifting<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData17]</td>
+          <td class="col-duration">1.47</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Driving
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Driving.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9e28068e0017ca26bd&#x27;, &#x27;description&#x27;: &#x27;Driving&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:42.914Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:42.914Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Driving
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Driving
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Driving<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData18]</td>
+          <td class="col-duration">1.52</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Eating
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Eating.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989fa028068e0017ca26be&#x27;, &#x27;description&#x27;: &#x27;Eating&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:44.365Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:44.365Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Eating
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Eating
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Eating<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_addtask[getData19]</td>
+          <td class="col-duration">1.53</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_addtask:test_Todo.py:84 Add task Api invoked for task name Speaking
+INFO     test_addtask:test_Todo.py:89 Add task Api response received for task name Speaking.Received response {&#x27;success&#x27;: True, &#x27;data&#x27;: {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989fa128068e0017ca26c0&#x27;, &#x27;description&#x27;: &#x27;Speaking&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:45.897Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:45.897Z&#x27;, &#x27;__v&#x27;: 0}}
+INFO     test_addtask:test_Todo.py:103 Add task API assertion completed for task name Speaking
+INFO     test_addtask:test_Todo.py:105 Add task API response backup started for task name Speaking
+INFO     test_addtask:test_Todo.py:107 Add task API response backup completed for task name Speaking<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_validate_tasks</td>
+          <td class="col-duration">1.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_validate_tasks:test_Todo.py:111 Get all task API invoked 
+INFO     test_validate_tasks:test_Todo.py:116 Get all task API Response received {&#x27;count&#x27;: 20, &#x27;data&#x27;: [{&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8628068e0017ca26ac&#x27;, &#x27;description&#x27;: &#x27;Reading books&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8728068e0017ca26ad&#x27;, &#x27;description&#x27;: &#x27;Playing cricket&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8828068e0017ca26ae&#x27;, &#x27;description&#x27;: &#x27;Writing code&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8a28068e0017ca26af&#x27;, &#x27;description&#x27;: &#x27;Reading newspaper&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8b28068e0017ca26b0&#x27;, &#x27;description&#x27;: &#x27;Playing football&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8d28068e0017ca26b1&#x27;, &#x27;description&#x27;: &#x27;Gardening&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8e28068e0017ca26b2&#x27;, &#x27;description&#x27;: &#x27;Watching TV&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9028068e0017ca26b3&#x27;, &#x27;description&#x27;: &#x27;Drinking&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9128068e0017ca26b4&#x27;, &#x27;description&#x27;: &#x27;Running&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9328068e0017ca26b5&#x27;, &#x27;description&#x27;: &#x27;Cycling&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9428068e0017ca26b6&#x27;, &#x27;description&#x27;: &#x27;Refreshing&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:32.489Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:32.489Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9528068e0017ca26b7&#x27;, &#x27;description&#x27;: &#x27;Jogging&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:33.886Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:33.886Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9728068e0017ca26b8&#x27;, &#x27;description&#x27;: &#x27;Cleaning&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:35.299Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:35.299Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9828068e0017ca26b9&#x27;, &#x27;description&#x27;: &#x27;Listening&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:36.731Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:36.731Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9a28068e0017ca26ba&#x27;, &#x27;description&#x27;: &#x27;Jumping&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:38.163Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:38.163Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9b28068e0017ca26bb&#x27;, &#x27;description&#x27;: &#x27;Swimming&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:39.612Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:39.612Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9d28068e0017ca26bc&#x27;, &#x27;description&#x27;: &#x27;Lifting&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:41.438Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:41.438Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9e28068e0017ca26bd&#x27;, &#x27;description&#x27;: &#x27;Driving&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:42.914Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:42.914Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989fa028068e0017ca26be&#x27;, &#x27;description&#x27;: &#x27;Eating&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:44.365Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:44.365Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989fa128068e0017ca26c0&#x27;, &#x27;description&#x27;: &#x27;Speaking&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:45.897Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:45.897Z&#x27;, &#x27;__v&#x27;: 0}]}
+INFO     test_validate_tasks:test_Todo.py:122 All task names are validated and assertion successfull<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_pagination[getLimitData0]</td>
+          <td class="col-duration">1.35</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_pagination:test_Todo.py:127 Pagination Api based on limit invoked
+INFO     test_pagination:test_Todo.py:132 Pagination Api based on limit response received {&#x27;count&#x27;: 2, &#x27;data&#x27;: [{&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8628068e0017ca26ac&#x27;, &#x27;description&#x27;: &#x27;Reading books&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8728068e0017ca26ad&#x27;, &#x27;description&#x27;: &#x27;Playing cricket&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;__v&#x27;: 0}]}
+INFO     test_pagination:test_Todo.py:136 Pagination Api based on limit assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_pagination[getLimitData1]</td>
+          <td class="col-duration">1.44</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_pagination:test_Todo.py:127 Pagination Api based on limit invoked
+INFO     test_pagination:test_Todo.py:132 Pagination Api based on limit response received {&#x27;count&#x27;: 5, &#x27;data&#x27;: [{&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8628068e0017ca26ac&#x27;, &#x27;description&#x27;: &#x27;Reading books&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8728068e0017ca26ad&#x27;, &#x27;description&#x27;: &#x27;Playing cricket&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8828068e0017ca26ae&#x27;, &#x27;description&#x27;: &#x27;Writing code&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8a28068e0017ca26af&#x27;, &#x27;description&#x27;: &#x27;Reading newspaper&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8b28068e0017ca26b0&#x27;, &#x27;description&#x27;: &#x27;Playing football&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;__v&#x27;: 0}]}
+INFO     test_pagination:test_Todo.py:136 Pagination Api based on limit assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_pagination[getLimitData2]</td>
+          <td class="col-duration">1.35</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_pagination:test_Todo.py:127 Pagination Api based on limit invoked
+INFO     test_pagination:test_Todo.py:132 Pagination Api based on limit response received {&#x27;count&#x27;: 10, &#x27;data&#x27;: [{&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8628068e0017ca26ac&#x27;, &#x27;description&#x27;: &#x27;Reading books&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:18.112Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8728068e0017ca26ad&#x27;, &#x27;description&#x27;: &#x27;Playing cricket&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:19.554Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8828068e0017ca26ae&#x27;, &#x27;description&#x27;: &#x27;Writing code&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:20.960Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8a28068e0017ca26af&#x27;, &#x27;description&#x27;: &#x27;Reading newspaper&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:22.454Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8b28068e0017ca26b0&#x27;, &#x27;description&#x27;: &#x27;Playing football&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:23.894Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8d28068e0017ca26b1&#x27;, &#x27;description&#x27;: &#x27;Gardening&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:25.540Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f8e28068e0017ca26b2&#x27;, &#x27;description&#x27;: &#x27;Watching TV&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:26.892Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9028068e0017ca26b3&#x27;, &#x27;description&#x27;: &#x27;Drinking&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:28.275Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9128068e0017ca26b4&#x27;, &#x27;description&#x27;: &#x27;Running&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:29.658Z&#x27;, &#x27;__v&#x27;: 0}, {&#x27;completed&#x27;: False, &#x27;_id&#x27;: &#x27;62989f9328068e0017ca26b5&#x27;, &#x27;description&#x27;: &#x27;Cycling&#x27;, &#x27;owner&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:31.062Z&#x27;, &#x27;__v&#x27;: 0}]}
+INFO     test_pagination:test_Todo.py:136 Pagination Api based on limit assertion completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test/test_Todo.py::Test_Api::test_delete_user</td>
+          <td class="col-duration">1.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     test_delete_user:test_Todo.py:141 Delete user Api invoked
+INFO     test_delete_user:test_Todo.py:144 Delete user Api Response received {&#x27;age&#x27;: 25, &#x27;_id&#x27;: &#x27;62989f7e28068e0017ca26a8&#x27;, &#x27;name&#x27;: &#x27;Kumar&#x27;, &#x27;email&#x27;: &#x27;kumar@gmail.com&#x27;, &#x27;createdAt&#x27;: &#x27;2022-06-02T11:31:10.093Z&#x27;, &#x27;updatedAt&#x27;: &#x27;2022-06-02T11:31:16.642Z&#x27;, &#x27;__v&#x27;: 2}
+INFO     test_delete_user:test_Todo.py:147 Delete user API assertion completed<br/></div></td></tr></tbody></table></body></html>
